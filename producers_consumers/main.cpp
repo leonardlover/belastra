@@ -1,10 +1,14 @@
-#include <iostream>
 #include <stdlib.h>
-#include <sstream>
-#include <fstream>
-#include <thread>
+#include <string.h>
+#include <unistd.h>
+#include <sys/stat.h>
+
 #include <condition_variable>
+#include <iostream>
+#include <fstream>
 #include <mutex>
+#include <sstream>
+#include <thread>
 
 class Monitor {
     private:
@@ -133,8 +137,55 @@ void consumer(Monitor& monitor){
     std::cout << "CONSUMER FUNCTION ENDED" << std::endl << std::endl;
 }
 
-int main(void)
+
+int main(int argc, char *argv[])
 {
+    int opt;
+    long p = 0;
+    long c = 0;
+    long s = 0;
+    long t = 0;
+
+    // Parse command line arguments
+    while ((opt = getopt(argc, argv, "p:c:s:t:")) != -1) {
+        switch (opt) {
+        case 'p':
+            p = strtol(optarg, NULL, 0);
+            break;
+        case 'c':
+            c = strtol(optarg, NULL, 0);
+            break;
+        case 's':
+            s = strtol(optarg, NULL, 0);
+            break;
+        case 't':
+            t = strtol(optarg, NULL, 0);
+            break;
+        default:
+            return EXIT_FAILURE;
+        }
+    }
+
+    // Sanitize input
+    if (p <= 0) {
+        std::cerr << "Number of producers has to be positive." << std::endl;
+        return EXIT_FAILURE;
+    }
+    if (c <= 0) {
+        std::cerr << "Number of consumers has to be positive." << std::endl;
+        return EXIT_FAILURE;
+    }
+    if (s <= 0) {
+        std::cerr << "Initial size of queue has to be positive." << std::endl;
+        return EXIT_FAILURE;
+    }
+    if (t <= 0) {
+        std::cerr << "Consumers waiting time has to be positive." << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    std::cout << p << " " << c << " " << s << " " << t << std::endl;
+
     Monitor monitor(4);
 
     std::thread producerTest(producer, std::ref(monitor));
@@ -145,5 +196,5 @@ int main(void)
 
     consumerTest.join();
 
-    return 0;
+    return EXIT_SUCCESS;
 }
