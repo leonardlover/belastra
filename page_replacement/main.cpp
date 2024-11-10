@@ -30,16 +30,14 @@ struct frameSpace {
 	
 	//map new vpn into frame, used or not 
 	//returns vpn of evicted page if any, else returns -1
-	int map(int vpn, int index){
-		int old = frames[index];
+	void map(int vpn, int index, bool newSlotUsed){
 		frames[index] = vpn;
-		if(old == -1){
+		if(newSlotUsed){
 			usedSpace++;
 			if(usedSpace == frameNumber){
 				full = true;
 			}
-		}		
-		return old;		
+		}			
 	} 
 	
 	void printfs(){
@@ -84,7 +82,7 @@ struct entry{
 //Struct to simulate the Page Table implemented with Hashing and Chaining
 struct hashedPageTable {
 	int bucketNumber;
-	std::vector<std::vector<entry*>> table;
+	std::vector<std::vector<entry>> table;
 	
 	//Insert to be used only when map for vpn is not found
 	void insertEntry(int vpn, int mf){
@@ -92,8 +90,8 @@ struct hashedPageTable {
 		entry* ep;
 		entry e(1,0, vpn, mf);
 		ep = &e;
-		table[index].push_back(ep);
-	        std::cout << "ENTRY INSERTED: " << table[index][table[index].size()-1]->virtualPageNumber << std::endl;	
+		table[index].push_back(e);
+	        //std::cout << "ENTRY INSERTED: " << table[index][table[index].size()-1]->virtualPageNumber << std::endl;	
 	}
 	
 	//Indicates whether entry is in table and if it is valid
@@ -103,12 +101,12 @@ struct hashedPageTable {
 	//1: entry found with valid bit set to 1
 	int searchEntry(int vpn){
 		int index = hashFunction(vpn);
-		std::cout << "INDEX SEARCH: " << index << " TABLE[INDEX] SIZE: " << table[index].size() << std::endl;
+		//std::cout << "INDEX SEARCH: " << index << " TABLE[INDEX] SIZE: " << table[index].size() << std::endl;
 		for(int i = 0; i < table[index].size(); ++i){
-			entry* e = table[index][i];
-			std::cout << "WTFFF: "<< e->virtualPageNumber << " " << e->valid <<std::endl;
-			if(e->virtualPageNumber == vpn){
-				if(e->valid==1){
+			entry e = table[index][i];
+			//std::cout << "WTFFF: "<< e->virtualPageNumber << " " << e->valid <<std::endl;
+			if(e.virtualPageNumber == vpn){
+				if(e.valid==1){
 					return 1;
 				}
 				return 0;		
@@ -122,10 +120,10 @@ struct hashedPageTable {
 	void setValid(int vpn, int v){
 		int index = hashFunction(vpn);
 		for(int i = 0; i < table[index].size(); ++i){
-			entry* e = table[index][i];
-			std::cout << "SET VALID eVPN: " << e->virtualPageNumber << std::endl;
-			if(e->virtualPageNumber == vpn){
-				e->valid = v;
+			entry e = table[index][i];
+			//std::cout << "SET VALID eVPN: " << e->virtualPageNumber << std::endl;
+			if(e.virtualPageNumber == vpn){
+				table[index][i].valid = v;
 				return;
 			}
 		}
@@ -141,8 +139,8 @@ struct hashedPageTable {
 		for(int i = 0; i < table.size(); ++i){
 			std::cout << "Table Entry " << i << std::endl;
 			for(int j=0; j< table[i].size(); ++j){
-				entry* p = table[i][j];
-				std::cout << p->virtualPageNumber << " ";
+				entry p = table[i][j];
+				std::cout<< "vpn: " << p.virtualPageNumber << " valid: " << p.valid << " --- ";
 			}
 			std::cout << std::endl;
 		}
@@ -174,8 +172,8 @@ int fifo(frameSpace* fs){
 		frames[i] = frames[i+1];
 	}
 	fs->frames = frames;
-	//Returns last item: last element to be added goes at end
-	return frames.size() - 1;
+	//Returns index to use
+	return frames.size()-1;
 }
 
 int lru(frameSpace* fs){
@@ -302,7 +300,7 @@ int main(int argc, char *argv[]){
 	//Exception for page fault
 	try{
 	   int output = pageTable.searchEntry(vpn);
-	   std::cout << "SEARCH DONE: " << output << std::endl;
+	   //std::cout << "SEARCH DONE: " << output << std::endl;
   	   if(output == 1){
 	   	//Nothing happens since mapping already done
 		//Hit
@@ -315,30 +313,41 @@ int main(int argc, char *argv[]){
 	    if(searchCode == 0){
 	    	//Page was evicted previosly: Re-map into memory
 	     	//If the page was evicted, the frame space is full
-		int rframe = fifo(fsPointer); 
-		int oldvpn = fs.map(vpn, rframe);
+		int oldvpn = fs.frames[0];
+		int rframe = fifo(fsPointer);
+	       	//MAKE SURE OLD ELEMENT IS ALWAYS AT FIRST
+		//FIFO FUNCTION OR OTHER SHOULD PRESERVE RULE	
+		fs.map(vpn, rframe, false);
+		std::cout << "OLD VPN: " << oldvpn << " NEW VPN: " << vpn << std::endl;
 		pageTable.setValid(oldvpn, 0); //Evicted
+		pageTable.setValid(vpn, 1); //re-mapped
 	    }
 	    if(searchCode == -1){
-		std::cout << "FLAG FOR -1 SEARCHCODE" << std::endl;
+		//std::cout << "FLAG FOR -1 SEARCHCODE" << std::endl;
             	//Page is being referenced for the first time
 	    	//Map into memory
 		//The frame space could be or not be full
 		int available = fs.availableIndex();
 		if(available == -1){ //Full
+			//MAKE SURE OLD ELEMENT IS ALWAYS AT FIRST
+			int oldvpn = fs.frames[0];
 			int rframe = fifo(fsPointer);
-			int oldvpn = fs.map(vpn, rframe);
+			fs.map(vpn, rframe, false);
 			pageTable.insertEntry(vpn, rframe);
 			pageTable.setValid(oldvpn, 0); //Evicted
-			std::cout << "FLAG FULL rframe: " << rframe << " oldvpn: " << oldvpn << " vpn: " << vpn << std::endl;
+			std::cout << "OLD VPN: " << oldvpn << " NEW VPN: " << vpn << std::endl;
+			//std::cout << "FLAG FULL rframe: " << rframe << " oldvpn: " << oldvpn << " vpn: " << vpn << std::endl;
 		}else{ //Not full
-		       	std::cout << "FLAG NOT FULL: " << available << std::endl;
-			fs.map(vpn, available);
+		       	//std::cout << "FLAG NOT FULL: " << available << std::endl;
+			fs.map(vpn, available, true);
 			//Add to page table
 			pageTable.insertEntry(vpn, available);
 		}
 	    }
+	
 	}
+	fs.printfs();
+	pageTable.printTable();
     }
     fs.printfs();
     pageTable.printTable();
