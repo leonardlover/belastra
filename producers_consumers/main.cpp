@@ -41,7 +41,9 @@ class Monitor {
                 }
 
                 out = 0;
-                in = count - 1;
+                in = count;
+
+                std::cout << "SIZE GOT DUPLICATED" << std::endl << std::endl;
             }
         }
 
@@ -68,9 +70,10 @@ class Monitor {
                     in = 0;
                 }
                 else {
-                    in = count - 1;
+                    in = count;
                 }
-                
+
+                std::cout << "SIZE GOT REDUCED" << std::endl << std::endl;                
             }
         }
 
@@ -110,6 +113,8 @@ class Monitor {
             out = (out + 1) % size;
             count--;
 
+            reduceSize();
+
             spaceAvailable.notify_one();
 
             printInfo();
@@ -117,8 +122,6 @@ class Monitor {
             std::cout << "--------------------------" << std::endl;
 
             mtxWrapper.unlock();
-
-            // reduceSize();
         }
 
         void produce(int id){
@@ -134,6 +137,8 @@ class Monitor {
             in = (in + 1) % size;
             count++;
 
+            duplicateSize();
+
             productAvailable.notify_one();
 
             printInfo();
@@ -141,8 +146,6 @@ class Monitor {
             std::cout << "--------------------------" << std::endl;
 
             mtxWrapper.unlock();
-
-            // duplicateSize();
         }
 };
 
