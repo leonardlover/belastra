@@ -58,7 +58,7 @@ struct frameSpace {
 		for(int i = 0; i < frameNumber; ++i){
 			frames[i] = -1;
 		}
-		std::cout << "Successfull construction of frameSpace of size " << frameNumber<< std::endl;	
+		//std::cout << "Successfull construction of frameSpace of size " << frameNumber<< std::endl;	
 	}
 };
 
@@ -75,7 +75,7 @@ struct entry{
 		this->ref = r;
 		this->virtualPageNumber = vpn;
 		this->mappedFrame = mf;
-		std::cout << "Successfull construction of entry for the VPN: " << virtualPageNumber << std::endl;
+		//std::cout << "Successfull construction of entry for the VPN: " << virtualPageNumber << std::endl;
 	}
 };
 
@@ -151,7 +151,7 @@ struct hashedPageTable {
 	hashedPageTable(int b){
 		this->bucketNumber = b;
 		table.resize(bucketNumber);
-		std::cout << "Successful construction of Hashed Page Table with size: " << b << std::endl;
+		//std::cout << "Successful construction of Hashed Page Table with size: " << b << std::endl;
 	}
 };
 
@@ -314,11 +314,11 @@ int main(int argc, char *argv[]){
 	    	//Page was evicted previosly: Re-map into memory
 	     	//If the page was evicted, the frame space is full
 		int oldvpn = fs.frames[0];
-		int rframe = fifo(fsPointer);
+		int rframe = pageReplacer(fsPointer);
 	       	//MAKE SURE OLD ELEMENT IS ALWAYS AT FIRST
 		//FIFO FUNCTION OR OTHER SHOULD PRESERVE RULE	
 		fs.map(vpn, rframe, false);
-		std::cout << "OLD VPN: " << oldvpn << " NEW VPN: " << vpn << std::endl;
+		//std::cout << "OLD VPN: " << oldvpn << " NEW VPN: " << vpn << std::endl;
 		pageTable.setValid(oldvpn, 0); //Evicted
 		pageTable.setValid(vpn, 1); //re-mapped
 	    }
@@ -331,11 +331,11 @@ int main(int argc, char *argv[]){
 		if(available == -1){ //Full
 			//MAKE SURE OLD ELEMENT IS ALWAYS AT FIRST
 			int oldvpn = fs.frames[0];
-			int rframe = fifo(fsPointer);
+			int rframe = pageReplacer(fsPointer);
 			fs.map(vpn, rframe, false);
 			pageTable.insertEntry(vpn, rframe);
 			pageTable.setValid(oldvpn, 0); //Evicted
-			std::cout << "OLD VPN: " << oldvpn << " NEW VPN: " << vpn << std::endl;
+			//std::cout << "OLD VPN: " << oldvpn << " NEW VPN: " << vpn << std::endl;
 			//std::cout << "FLAG FULL rframe: " << rframe << " oldvpn: " << oldvpn << " vpn: " << vpn << std::endl;
 		}else{ //Not full
 		       	//std::cout << "FLAG NOT FULL: " << available << std::endl;
@@ -346,11 +346,13 @@ int main(int argc, char *argv[]){
 	    }
 	
 	}
+	std::cout << "------------------------------------" << std::endl;
 	fs.printfs();
 	pageTable.printTable();
+	std::cout << "------------------------------------" << std::endl;
     }
-    fs.printfs();
-    pageTable.printTable();
+    
+   
 	
     return EXIT_SUCCESS;
 }
