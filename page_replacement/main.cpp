@@ -64,7 +64,7 @@ struct frameSpace {
 
 //Struct to simulate a page table entry 
 struct entry{
-	int valid; //Simula#tes valid bit
+	int valid; //Simulates valid bit
 	int ref; //reference bit, to be used with LRU and LRU clock
 	int virtualPageNumber;
 	int mappedFrame;
@@ -177,8 +177,35 @@ int fifo(frameSpace* fs){
 }
 
 int lru(frameSpace* fs){
+	std::vector<int> frames = fs->frames;
 
-	return 0;
+	// When popping from a LRU array, we're still
+	// popping the element at [0] and moving the
+	// rest of the array one space. Therefore, we use
+	// the same algorithm from FIFO to replace
+	// this element
+	for(int i = 0; i < frames.size()-1; ++i){
+		frames[i] = frames[i+1];
+	}
+	fs->frames = frames;
+	// Returns index to use
+	return frames.size()-1;
+}
+
+void lruUpdate(frameSpace*fs, int hit){
+	std::vector<int> frames = fs->frames;
+	int recentlyUsed;
+	for(int i = 0; i < frames.size(); ++i){
+		if(frames[i] == hit){
+			recentlyUsed = i;
+			break;
+		} 
+	}
+	for(int i = recentlyUsed; i < frames.size()-1; ++i){
+		frames[i] = frames[i+1];
+	}
+	frames[frames.size()-1] = hit;
+	fs->frames = frames;
 }
 
 int lruClock(frameSpace* fs){
@@ -304,6 +331,12 @@ int main(int argc, char *argv[]){
   	   if(output == 1){
 	   	//Nothing happens since mapping already done
 		//Hit
+
+		//if LRU, We must update the LRU accordingly
+		if(pageReplacer == lru){
+			lruUpdate(fsPointer, vpn);
+		}
+
 	   } else{
 		//Miss
 	   	throw(output);
