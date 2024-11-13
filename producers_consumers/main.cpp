@@ -9,6 +9,7 @@
 #include <mutex>
 #include <sstream>
 #include <thread>
+#include <vector>
 
 class Monitor {
     private:
@@ -16,9 +17,10 @@ class Monitor {
         int size;
         int count;
         int in, out;
+        int time;
         std::mutex mtx;
-        std::condition_variable isFull;
-        std::condition_variable isEmpty;
+        std::condition_variable productAvailable;
+        std::condition_variable spaceAvailable;
 
         void duplicateSize(){
             /*
@@ -73,9 +75,10 @@ class Monitor {
         }
 
     public:
-        Monitor(int s){
+        Monitor(int s, int t){
             size = s;
             items = new int[size];
+            time = t;
             count = 0;
             in = 0;
             out = 0;
@@ -94,49 +97,62 @@ class Monitor {
             std::cout << std::endl;
         }
 
-        void consumeTest(){
-            // ESTO ES SÓLO DE PRUEBA, FALTA LOCK Y DEMÁS COSAS
+        void consume(int id){
+            std::unique_lock<std::mutex> mtxWrapper(mtx);
+            std::cout << "CONSUMER " << id << " STARTED" << std::endl << std::endl;
 
-            if(count > 0){
-                items[out] = 0;
-                out = (out + 1) % size;
-                count--;
-
-                reduceSize();
+            if(count == 0){
+                productAvailable.wait(mtxWrapper);
+                std::cout << "CONSUMER " << id << " WOKE UP!" << std::endl;
             }
+
+            items[out] = 0;
+            out = (out + 1) % size;
+            count--;
+
+            spaceAvailable.notify_one();
+
+            printInfo();
+            std::cout << "CONSUMER " << id << " ENDED" << std::endl;
+            std::cout << "--------------------------" << std::endl;
+
+            mtxWrapper.unlock();
+
+            // reduceSize();
         }
 
-        void produceTest(){
-            // ESTO ES SÓLO DE PRUEBA, FALTA LOCK Y DEMÁS COSAS
+        void produce(int id){
+            std::unique_lock<std::mutex> mtxWrapper(mtx);
+            std::cout << "PRODUCER " << id << " STARTED" << std::endl << std::endl;
 
-            if(size > count){
-                items[in] = 1;
-                in = (in + 1) % size;
-                count++;
-
-                duplicateSize();
+            if(count == size){
+                spaceAvailable.wait(mtxWrapper);
+                std::cout << "PRODUCER " << id << " WOKE UP!" << std::endl;
             }
+
+            items[in] = 1;
+            in = (in + 1) % size;
+            count++;
+
+            productAvailable.notify_one();
+
+            printInfo();
+            std::cout << "PRODUCER " << id << " ENDED" << std::endl;
+            std::cout << "--------------------------" << std::endl;
+
+            mtxWrapper.unlock();
+
+            // duplicateSize();
         }
 };
 
-void producer(Monitor& monitor){
-    monitor.printInfo();
-    for(int i=0; i<4; i++){
-        monitor.produceTest();
-    }
-    monitor.printInfo();
-    std::cout << "PRODUCER FUNCTION ENDED" << std::endl << std::endl;
+void producer(Monitor& monitor, int id){ 
+    monitor.produce(id);
 }
 
-void consumer(Monitor& monitor){
-    monitor.printInfo();
-    for(int i=0; i<4; i++){
-        monitor.consumeTest();
-        monitor.printInfo();
-    }
-    std::cout << "CONSUMER FUNCTION ENDED" << std::endl << std::endl;
+void consumer(Monitor& monitor, int id){
+    monitor.consume(id);
 }
-
 
 int main(int argc, char *argv[])
 {
@@ -184,17 +200,25 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    std::cout << p << " " << c << " " << s << " " << t << std::endl;
+    Monitor monitor(s, t);
+    std::vector<std::thread> producers;
+    std::vector<std::thread> consumers;
 
-    Monitor monitor(4);
+    for(int i=0; i<p; i++){
+        producers.emplace_back(producer, std::ref(monitor), i+1);
+    }
 
-    std::thread producerTest(producer, std::ref(monitor));
+    for(int i=0; i<c; i++){
+        consumers.emplace_back(consumer, std::ref(monitor), i+1);
+    }
 
-    producerTest.join();
+    for(auto& producer : producers){
+        producer.join();
+    }
 
-    std::thread consumerTest(consumer, std::ref(monitor));
-
-    consumerTest.join();
+    for(auto& consumer : consumers){
+        consumer.join();
+    }
 
     return EXIT_SUCCESS;
 }
