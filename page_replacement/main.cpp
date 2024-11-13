@@ -128,6 +128,32 @@ struct hashedPageTable {
 			}
 		}
 	}
+
+	//Similar to the previous function, its used for an already existing page.
+	void setRef(int vpn, int r){
+		int index = hashFunction(vpn);
+		for(int i = 0; i < table[index].size(); ++i){
+			entry e = table[index][i];
+			//std::cout << "SET REFERENCED rVPN: " << r->virtualPageNumber << std::endl;
+			if(e.virtualPageNumber == vpn){
+				table[index][i].ref = r;
+				return;
+			}
+		}
+	}
+
+	// Get reference bit of a certain entry. Returns -1 if not found.
+	int getRef(int vpn){
+		int index = hashFunction(vpn);
+		for(int i = 0; i < table[index].size(); ++i){
+			entry e = table[index][i];
+			//std::cout << "SET REFERENCED rVPN: " << r->virtualPageNumber << std::endl;
+			if(e.virtualPageNumber == vpn){
+				return table[index][i].ref;
+			}
+		}
+		return -1;
+	}
 	
 	//Hash: just a modulo for the moment, could be changed
 	int hashFunction(int x){
@@ -155,13 +181,13 @@ struct hashedPageTable {
 	}
 };
 
-int optimal(frameSpace* fs){
+int optimal(hashedPageTable* pageTable, frameSpace* fs, int* clockPos){
 	
 	return 0;
 }
 
 //All of the below will return index of evicted vpn 
-int fifo(frameSpace* fs){
+int fifo(hashedPageTable* pageTable, frameSpace* fs, int* clockPos){
 	std::vector<int> frames = fs->frames;
 	//It is assumed that order of frames is a queue
 	//This is because of how availableIndex is implemented 
@@ -176,7 +202,7 @@ int fifo(frameSpace* fs){
 	return frames.size()-1;
 }
 
-int lru(frameSpace* fs){
+int lru(hashedPageTable* pageTable, frameSpace* fs, int* clockPos){
 	std::vector<int> frames = fs->frames;
 
 	// When popping from a LRU array, we're still
@@ -192,8 +218,12 @@ int lru(frameSpace* fs){
 	return frames.size()-1;
 }
 
-void lruUpdate(frameSpace*fs, int hit){
+void lruUpdate(frameSpace* fs, int hit){
 	std::vector<int> frames = fs->frames;
+
+	// We musts find the index of the vpn
+	// that has been recently used to move it
+	// back to the start of the queue
 	int recentlyUsed;
 	for(int i = 0; i < frames.size(); ++i){
 		if(frames[i] == hit){
@@ -201,15 +231,47 @@ void lruUpdate(frameSpace*fs, int hit){
 			break;
 		} 
 	}
+
+	// Update the queue accordingly, using
+	// recentlyUsed as the starting point, and later
+	// adding the most recently used frame at the start
 	for(int i = recentlyUsed; i < frames.size()-1; ++i){
 		frames[i] = frames[i+1];
 	}
 	frames[frames.size()-1] = hit;
+
+	// Update framespace
 	fs->frames = frames;
 }
 
-int lruClock(frameSpace* fs){
-	
+int lruClock(hashedPageTable* pageTable, frameSpace* fs, int* clockPos){
+	std::vector<int> frames = fs->frames;
+
+	// We need the PageTable to get and set reference bits
+	hashedPageTable tb = *pageTable;
+
+	// We need the clock's position from where it left off
+	int circularQueueIndex = *clockPos;
+
+	while(true){
+		
+		// Using the clock, we get the reference bits of each element in frames
+		// Each time a 1 is found, we set it to 0 - their second chance is given,
+		// and then we keep ticking the clock.
+		// When we find a 0, we stop the clock and set its position, we
+		// replace the table to the one with new reference values, and then
+		// we return the index in which the new element will be inserted
+		if(tb.getRef(frames[circularQueueIndex % (int)frames.size()]) == 1){
+			tb.setRef(frames[circularQueueIndex % (int)frames.size()], 0);
+		} else {
+			*clockPos = (circularQueueIndex % (int)frames.size());
+			*pageTable = tb; 
+			return (circularQueueIndex % (int)frames.size());
+		}
+		
+		circularQueueIndex++;
+	}
+
 	return 0;
 }
 
@@ -301,10 +363,11 @@ int main(int argc, char *argv[]){
     frameSpace fs(m);
     frameSpace* fsPointer = &fs;
     //m table entries at the moment
-    hashedPageTable pageTable(m);	
+    hashedPageTable pageTable(m);
+	hashedPageTable* ptPointer = &pageTable;	
     
     //function pointer for page replacement 
-    int (*pageReplacer)(frameSpace*);
+    int (*pageReplacer)(hashedPageTable*, frameSpace*, int*);
     if(strcmp(a, "OPTIMAL")==0){
     	pageReplacer = optimal;
     }	
@@ -321,6 +384,9 @@ int main(int argc, char *argv[]){
     //Keep track of amount of page faults
     int pageFaults = 0;	
 
+	//Index for LRU Clock, may not be used
+	int clockIndex = 0;
+
     //Now the main page referencing happens
     for(int i = 0; i< pageReferences.size(); ++i ){
     	int vpn = pageReferences[i];
@@ -329,12 +395,16 @@ int main(int argc, char *argv[]){
 	   int output = pageTable.searchEntry(vpn);
 	   //std::cout << "SEARCH DONE: " << output << std::endl;
   	   if(output == 1){
-	   	//Nothing happens since mapping already done
 		//Hit
 
-		//if LRU, We must update the LRU accordingly
+		//if LRU, we must update the LRU accordingly
 		if(pageReplacer == lru){
 			lruUpdate(fsPointer, vpn);
+		}
+
+		//if LRU Clock, we must update the referenced bit
+		if(pageReplacer == lruClock){
+			pageTable.setRef(vpn, 1);
 		}
 
 	   } else{
@@ -347,13 +417,14 @@ int main(int argc, char *argv[]){
 	    	//Page was evicted previosly: Re-map into memory
 	     	//If the page was evicted, the frame space is full
 		int oldvpn = fs.frames[0];
-		int rframe = pageReplacer(fsPointer);
+		int rframe = pageReplacer(ptPointer, fsPointer, &clockIndex);
 	       	//MAKE SURE OLD ELEMENT IS ALWAYS AT FIRST
 		//FIFO FUNCTION OR OTHER SHOULD PRESERVE RULE	
 		fs.map(vpn, rframe, false);
 		//std::cout << "OLD VPN: " << oldvpn << " NEW VPN: " << vpn << std::endl;
 		pageTable.setValid(oldvpn, 0); //Evicted
 		pageTable.setValid(vpn, 1); //re-mapped
+		pageTable.setRef(vpn, 1); // referenced
 	    }
 	    if(searchCode == -1){
 		//std::cout << "FLAG FOR -1 SEARCHCODE" << std::endl;
@@ -364,10 +435,11 @@ int main(int argc, char *argv[]){
 		if(available == -1){ //Full
 			//MAKE SURE OLD ELEMENT IS ALWAYS AT FIRST
 			int oldvpn = fs.frames[0];
-			int rframe = pageReplacer(fsPointer);
+			int rframe = pageReplacer(ptPointer, fsPointer, &clockIndex);
 			fs.map(vpn, rframe, false);
 			pageTable.insertEntry(vpn, rframe);
 			pageTable.setValid(oldvpn, 0); //Evicted
+			pageTable.setRef(vpn, 1); // Referenced
 			//std::cout << "OLD VPN: " << oldvpn << " NEW VPN: " << vpn << std::endl;
 			//std::cout << "FLAG FULL rframe: " << rframe << " oldvpn: " << oldvpn << " vpn: " << vpn << std::endl;
 		}else{ //Not full
