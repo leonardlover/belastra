@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <vector>
+#include <map>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -181,13 +182,55 @@ struct hashedPageTable {
 	}
 };
 
-int optimal(hashedPageTable* pageTable, frameSpace* fs, int* clockPos){
-	
-	return 0;
+int optimal(hashedPageTable* pageTable, frameSpace* fs, int* clockPos, std::vector<int> pageRef, int index){
+	std::vector<int> frames = fs->frames;
+	hashedPageTable tb = *pageTable;
+
+	// Map used to link a frame to its index
+	std::map<int, int> futureFrames;
+
+	// cont used for the distance before the next use of the frame
+	int cont = 0;
+
+	// max used for the longest distance
+	int max = 0;
+
+	// future used for reading the pageRef vector (looking into the future)
+	int future;
+
+	int returnValue;
+
+	// Save each of its frame and its associated index
+	for(int i = 0; i < frames.size(); ++i){
+		futureFrames.insert( std::pair<int, int>(frames[i], i) );
+	}
+
+	// For each frame, count the distance before the next iteration in the
+	// pageRef vector. If this ammount is greater than the saved max,
+	// then replace accordingly, and the returnValue will be the index
+	// of the frame we just checked.
+	for(int i = 0; i < frames.size(); ++i){
+		cont = 0;
+		future = 0;
+		while(pageRef[index+future] != frames[i] && pageRef.size() > future+index){
+			cont++;
+			future++;
+		}
+		if(cont > max){
+			max = cont;
+			returnValue = futureFrames[frames[i]];
+		}
+	}
+
+	// set the valid bit of the evicted frame to 0, and update.
+	tb.setValid(frames[returnValue], 0);
+	*pageTable = tb;
+
+	return returnValue;
 }
 
 //All of the below will return index of evicted vpn 
-int fifo(hashedPageTable* pageTable, frameSpace* fs, int* clockPos){
+int fifo(hashedPageTable* pageTable, frameSpace* fs, int* clockPos, std::vector<int> pageRef, int index){
 	std::vector<int> frames = fs->frames;
 	//It is assumed that order of frames is a queue
 	//This is because of how availableIndex is implemented 
@@ -202,7 +245,7 @@ int fifo(hashedPageTable* pageTable, frameSpace* fs, int* clockPos){
 	return frames.size()-1;
 }
 
-int lru(hashedPageTable* pageTable, frameSpace* fs, int* clockPos){
+int lru(hashedPageTable* pageTable, frameSpace* fs, int* clockPos, std::vector<int> pageRef, int index){
 	std::vector<int> frames = fs->frames;
 
 	// When popping from a LRU array, we're still
@@ -221,7 +264,7 @@ int lru(hashedPageTable* pageTable, frameSpace* fs, int* clockPos){
 void lruUpdate(frameSpace* fs, int hit){
 	std::vector<int> frames = fs->frames;
 
-	// We musts find the index of the vpn
+	// We must find the index of the vpn
 	// that has been recently used to move it
 	// back to the start of the queue
 	int recentlyUsed;
@@ -244,7 +287,7 @@ void lruUpdate(frameSpace* fs, int hit){
 	fs->frames = frames;
 }
 
-int lruClock(hashedPageTable* pageTable, frameSpace* fs, int* clockPos){
+int lruClock(hashedPageTable* pageTable, frameSpace* fs, int* clockPos, std::vector<int> pageRef, int index){
 	std::vector<int> frames = fs->frames;
 
 	// We need the PageTable to get and set reference bits
@@ -368,7 +411,7 @@ int main(int argc, char *argv[]){
 	hashedPageTable* ptPointer = &pageTable;	
     
     //function pointer for page replacement 
-    int (*pageReplacer)(hashedPageTable*, frameSpace*, int*);
+    int (*pageReplacer)(hashedPageTable*, frameSpace*, int*, std::vector<int>, int);
     if(strcmp(a, "OPTIMAL")==0){
     	pageReplacer = optimal;
     }	
@@ -410,6 +453,7 @@ int main(int argc, char *argv[]){
 
 	   } else{
 		//Miss
+		pageFaults++;
 	   	throw(output);
 	   }
 	}
@@ -418,49 +462,15 @@ int main(int argc, char *argv[]){
 	    	//Page was evicted previosly: Re-map into memory
 	     	//If the page was evicted, the frame space is full
 
-		if(pageReplacer == fifo || pageReplacer == lru){
-
-			// Element WILL BE at the first position, though this can be
-			// managed inside the pageReplacer() function. Should we?
-			int oldvpn = fs.frames[0];
-			int rframe = pageReplacer(ptPointer, fsPointer, &clockIndex);
-	
-			fs.map(vpn, rframe, false);
-			//std::cout << "OLD VPN: " << oldvpn << " NEW VPN: " << vpn << std::endl;
-			pageTable.setValid(oldvpn, 0); //Evicted
-			pageTable.setValid(vpn, 1); //re-mapped
-			pageTable.setRef(vpn, 1); // referenced
-		} else{
-			// We don't know for certain if the element will be in the first
-			// position as for the nature of the clock. pageRaplacer()
-			// manages the valid bit of the old vpn.
-			int rframe = pageReplacer(ptPointer, fsPointer, &clockIndex);
-
-			fs.map(vpn, rframe, false);
-			//std::cout << "OLD VPN: " << oldvpn << " NEW VPN: " << vpn << std::endl;
-			pageTable.setValid(vpn, 1); //re-mapped
-			pageTable.setRef(vpn, 1); // referenced
-		}
-
-		
-	    }
-	    if(searchCode == -1){
-		//std::cout << "FLAG FOR -1 SEARCHCODE" << std::endl;
-            	//Page is being referenced for the first time
-	    	//Map into memory
-		//The frame space could be or not be full
-		int available = fs.availableIndex();
-		if(available == -1){ //Full
 			if(pageReplacer == fifo || pageReplacer == lru){
 
 				// Element WILL BE at the first position, though this can be
 				// managed inside the pageReplacer() function. Should we?
 				int oldvpn = fs.frames[0];
-				int rframe = pageReplacer(ptPointer, fsPointer, &clockIndex);
+				int rframe = pageReplacer(ptPointer, fsPointer, &clockIndex, pageReferences, i);
 		
 				fs.map(vpn, rframe, false);
-				pageTable.insertEntry(vpn, rframe);
-				
+				//std::cout << "OLD VPN: " << oldvpn << " NEW VPN: " << vpn << std::endl;
 				pageTable.setValid(oldvpn, 0); //Evicted
 				pageTable.setValid(vpn, 1); //re-mapped
 				pageTable.setRef(vpn, 1); // referenced
@@ -468,20 +478,55 @@ int main(int argc, char *argv[]){
 				// We don't know for certain if the element will be in the first
 				// position as for the nature of the clock. pageRaplacer()
 				// manages the valid bit of the old vpn.
-				int rframe = pageReplacer(ptPointer, fsPointer, &clockIndex);
-					
-				fs.map(vpn, rframe, false);
-				pageTable.insertEntry(vpn, rframe);
+				int rframe = pageReplacer(ptPointer, fsPointer, &clockIndex, pageReferences, i);
 
+				fs.map(vpn, rframe, false);
+				//std::cout << "OLD VPN: " << oldvpn << " NEW VPN: " << vpn << std::endl;
 				pageTable.setValid(vpn, 1); //re-mapped
 				pageTable.setRef(vpn, 1); // referenced
 			}
-		}else{ //Not full
-		       	//std::cout << "FLAG NOT FULL: " << available << std::endl;
-			fs.map(vpn, available, true);
-			//Add to page table
-			pageTable.insertEntry(vpn, available);
-		}
+
+		
+	    }
+
+	    if(searchCode == -1){
+			//std::cout << "FLAG FOR -1 SEARCHCODE" << std::endl;
+					//Page is being referenced for the first time
+				//Map into memory
+			//The frame space could be or not be full
+			int available = fs.availableIndex();
+			if(available == -1){ //Full
+				if(pageReplacer == fifo || pageReplacer == lru){
+
+					// Element WILL BE at the first position, though this can be
+					// managed inside the pageReplacer() function. Should we?
+					int oldvpn = fs.frames[0];
+					int rframe = pageReplacer(ptPointer, fsPointer, &clockIndex, pageReferences, i);
+			
+					fs.map(vpn, rframe, false);
+					pageTable.insertEntry(vpn, rframe);
+					
+					pageTable.setValid(oldvpn, 0); //Evicted
+					pageTable.setValid(vpn, 1); //re-mapped
+					pageTable.setRef(vpn, 1); // referenced
+				} else{
+					// We don't know for certain if the element will be in the first
+					// position as for the nature of the clock. pageRaplacer()
+					// manages the valid bit of the old vpn.
+					int rframe = pageReplacer(ptPointer, fsPointer, &clockIndex, pageReferences, i);
+						
+					fs.map(vpn, rframe, false);
+					pageTable.insertEntry(vpn, rframe);
+
+					pageTable.setValid(vpn, 1); //re-mapped
+					pageTable.setRef(vpn, 1); // referenced
+				}
+			}else{ //Not full
+					//std::cout << "FLAG NOT FULL: " << available << std::endl;
+				fs.map(vpn, available, true);
+				//Add to page table
+				pageTable.insertEntry(vpn, available);
+			}
 	    }
 	
 	}
@@ -490,6 +535,8 @@ int main(int argc, char *argv[]){
 	pageTable.printTable();
 	std::cout << "------------------------------------" << std::endl;
     }
+
+	std::cout << '\n' << "Hubieron " << pageFaults << " fallos de página. \n";
     
    
 	
