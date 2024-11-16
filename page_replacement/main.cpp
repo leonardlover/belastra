@@ -265,6 +265,7 @@ int lruClock(hashedPageTable* pageTable, frameSpace* fs, int* clockPos){
 			tb.setRef(frames[circularQueueIndex % (int)frames.size()], 0);
 		} else {
 			*clockPos = (circularQueueIndex % (int)frames.size());
+			tb.setValid(frames[circularQueueIndex % (int)frames.size()], 0);
 			*pageTable = tb; 
 			return (circularQueueIndex % (int)frames.size());
 		}
@@ -416,15 +417,32 @@ int main(int argc, char *argv[]){
 	    if(searchCode == 0){
 	    	//Page was evicted previosly: Re-map into memory
 	     	//If the page was evicted, the frame space is full
-		int oldvpn = fs.frames[0];
-		int rframe = pageReplacer(ptPointer, fsPointer, &clockIndex);
-	       	//MAKE SURE OLD ELEMENT IS ALWAYS AT FIRST
-		//FIFO FUNCTION OR OTHER SHOULD PRESERVE RULE	
-		fs.map(vpn, rframe, false);
-		//std::cout << "OLD VPN: " << oldvpn << " NEW VPN: " << vpn << std::endl;
-		pageTable.setValid(oldvpn, 0); //Evicted
-		pageTable.setValid(vpn, 1); //re-mapped
-		pageTable.setRef(vpn, 1); // referenced
+
+		if(pageReplacer == fifo || pageReplacer == lru){
+
+			// Element WILL BE at the first position, though this can be
+			// managed inside the pageReplacer() function. Should we?
+			int oldvpn = fs.frames[0];
+			int rframe = pageReplacer(ptPointer, fsPointer, &clockIndex);
+	
+			fs.map(vpn, rframe, false);
+			//std::cout << "OLD VPN: " << oldvpn << " NEW VPN: " << vpn << std::endl;
+			pageTable.setValid(oldvpn, 0); //Evicted
+			pageTable.setValid(vpn, 1); //re-mapped
+			pageTable.setRef(vpn, 1); // referenced
+		} else{
+			// We don't know for certain if the element will be in the first
+			// position as for the nature of the clock. pageRaplacer()
+			// manages the valid bit of the old vpn.
+			int rframe = pageReplacer(ptPointer, fsPointer, &clockIndex);
+
+			fs.map(vpn, rframe, false);
+			//std::cout << "OLD VPN: " << oldvpn << " NEW VPN: " << vpn << std::endl;
+			pageTable.setValid(vpn, 1); //re-mapped
+			pageTable.setRef(vpn, 1); // referenced
+		}
+
+		
 	    }
 	    if(searchCode == -1){
 		//std::cout << "FLAG FOR -1 SEARCHCODE" << std::endl;
@@ -433,15 +451,31 @@ int main(int argc, char *argv[]){
 		//The frame space could be or not be full
 		int available = fs.availableIndex();
 		if(available == -1){ //Full
-			//MAKE SURE OLD ELEMENT IS ALWAYS AT FIRST
-			int oldvpn = fs.frames[0];
-			int rframe = pageReplacer(ptPointer, fsPointer, &clockIndex);
-			fs.map(vpn, rframe, false);
-			pageTable.insertEntry(vpn, rframe);
-			pageTable.setValid(oldvpn, 0); //Evicted
-			pageTable.setRef(vpn, 1); // Referenced
-			//std::cout << "OLD VPN: " << oldvpn << " NEW VPN: " << vpn << std::endl;
-			//std::cout << "FLAG FULL rframe: " << rframe << " oldvpn: " << oldvpn << " vpn: " << vpn << std::endl;
+			if(pageReplacer == fifo || pageReplacer == lru){
+
+				// Element WILL BE at the first position, though this can be
+				// managed inside the pageReplacer() function. Should we?
+				int oldvpn = fs.frames[0];
+				int rframe = pageReplacer(ptPointer, fsPointer, &clockIndex);
+		
+				fs.map(vpn, rframe, false);
+				pageTable.insertEntry(vpn, rframe);
+				
+				pageTable.setValid(oldvpn, 0); //Evicted
+				pageTable.setValid(vpn, 1); //re-mapped
+				pageTable.setRef(vpn, 1); // referenced
+			} else{
+				// We don't know for certain if the element will be in the first
+				// position as for the nature of the clock. pageRaplacer()
+				// manages the valid bit of the old vpn.
+				int rframe = pageReplacer(ptPointer, fsPointer, &clockIndex);
+					
+				fs.map(vpn, rframe, false);
+				pageTable.insertEntry(vpn, rframe);
+
+				pageTable.setValid(vpn, 1); //re-mapped
+				pageTable.setRef(vpn, 1); // referenced
+			}
 		}else{ //Not full
 		       	//std::cout << "FLAG NOT FULL: " << available << std::endl;
 			fs.map(vpn, available, true);
