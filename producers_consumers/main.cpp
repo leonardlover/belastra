@@ -113,7 +113,8 @@ public:
         log_file << "CONSUMER " << id << " STARTED" << std::endl;
 
         // if all producers are done, make consumer sleep and exit
-        if (p_done == p) {
+        // ONLY DO THIS IS QUEUE IS EMPTY
+        if (p_done == p && count == 0) {
             log_file << "CONSUMER " << id << " BEGINS SLEEPING!" << std::endl;
             std::this_thread::sleep_for(std::chrono::seconds(t));
             log_file << "CONSUMER " << id << " AWOKE FROM SLUMBER TO EXIT!" << std::endl;
@@ -136,6 +137,11 @@ public:
         log_file << "CONSUMER " << id << " ENDED" << std::endl;
 
         mtxWrapper.unlock();
+
+        // consume again, until queue is empty
+        // no need for while or if since thread WILL sleep when all producers
+        // are done and all elements consumed
+        consume(id);
     }
 
     void produce(int id)
