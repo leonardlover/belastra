@@ -320,182 +320,148 @@ int lruClock(hashedPageTable* pageTable, frameSpace* fs, int* clockPos, std::vec
 }
 
 int main(int argc, char *argv[]){
-    int opt;
-    const char *algorithms[] = {"OPTIMAL", "FIFO", "LRU", "LRU_CLOCK"};
-    bool found;
-    struct stat stat_buffer;
-    long m = 0;
-    char *a = NULL;
-    char *f = NULL;
+	int opt;
+	const char *algorithms[] = {"OPTIMAL", "FIFO", "LRU", "LRU_CLOCK"};
+	bool found;
+	struct stat stat_buffer;
+	long m = 0;
+	char *a = NULL;
+	char *f = NULL;
 
-    // Read command line arguments
-    while ((opt = getopt(argc, argv, "m:a:f:")) != -1) {
-        switch (opt) {
-        case 'm':
-            m = strtol(optarg, NULL, 0);
-            break;
-        case 'a':
-            a = optarg;
-            break;
-        case 'f':
-            f = optarg;
-            break;
-        default:
-            return EXIT_FAILURE;
-        }
-    }
+	// Read command line arguments
+	while ((opt = getopt(argc, argv, "m:a:f:")) != -1) {
+		switch (opt) {
+		case 'm':
+				m = strtol(optarg, NULL, 0);
+				break;
+		case 'a':
+				a = optarg;
+				break;
+		case 'f':
+				f = optarg;
+				break;
+		default:
+				return EXIT_FAILURE;
+		}
+	}
 
-    // Sanitize input
-    if (m <= 0) {
-        std::cerr << "Number of frames has to be positive." << std::endl;
-        return EXIT_FAILURE;
-    }
+	// Sanitize input
+	if (m <= 0) {
+		std::cerr << "Number of frames has to be positive." << std::endl;
+		return EXIT_FAILURE;
+	}
 
-    if (!a) {
-        std::cerr << "-a requires an argument." << std::endl;
-        return EXIT_FAILURE;
-    } else {
-        found = false;
-        for (auto algo: algorithms) {
-            if (strcmp(a, algo) == 0) {
-                found = true;
-                break;
-            }
-        }
+	if (!a) {
+		std::cerr << "-a requires an argument." << std::endl;
+		return EXIT_FAILURE;
+	} else {
+		found = false;
+		for (auto algo: algorithms) {
+				if (strcmp(a, algo) == 0) {
+						found = true;
+						break;
+				}
+		}
 
-        if (!found) {
-            std::cerr << "Algorithm has to be: 'OPTIMAL', 'FIFO', 'LRU', 'LRU_CLOCK'" << std::endl;
-            return EXIT_FAILURE;
-        }
-    }
+		if (!found) {
+			std::cerr << "Algorithm has to be: 'OPTIMAL', 'FIFO', 'LRU', 'LRU_CLOCK'" << std::endl;
+			return EXIT_FAILURE;
+		}
+	}
 
-    if (!f) {
-        std::cerr << "-f requires an argument." << std::endl;
-        return EXIT_FAILURE;
-    } else if (stat(f, &stat_buffer) != 0) {
-        std::cerr << "Path: '" << f << "' does not exist." << std::endl;
-        return EXIT_FAILURE;
-    }
+	if (!f) {
+		std::cerr << "-f requires an argument." << std::endl;
+		return EXIT_FAILURE;
+	} else if (stat(f, &stat_buffer) != 0) {
+		std::cerr << "Path: '" << f << "' does not exist." << std::endl;
+		return EXIT_FAILURE;
+	}
 
-    std::cout << "Received Input: " << m << " " << a << " " << f << std::endl;
+	std::cout << "Received Input: " << m << " " << a << " " << f << std::endl;
+
+	//Continuation of program
+	//Obtention of file input
+	std::vector<int> pageReferences;
+	std::ifstream file(f);
+	std::string s;
+	getline(file, s);
+	file.close();
+
+	//std::cout << s << std::endl;
 	
-    //Continuation of program
-    //Obtention of file input
-    std::vector<int> pageReferences;
-    std::ifstream file(f);
-    std::string s;
-    getline(file, s);
-    file.close();
+	std::istringstream stream(s);
+	int number;
 
-    //std::cout << s << std::endl;
-    
-    std::istringstream stream(s);
-    int number;
+	while(stream >> number){
+		pageReferences.push_back(number);
+	}
 
-    while(stream >> number){
-    	pageReferences.push_back(number);
-    }
+	/*
+	for(int num: pageReferences){
+		std::cout << num << " ";
+	}
+	std::cout << std::endl;
+	*/
 
-    /*
-    for(int num: pageReferences){
-    	std::cout << num << " ";
-    }
-    std::cout << std::endl;
-    */
-
-    //Inits
-    frameSpace fs(m);
-    frameSpace* fsPointer = &fs;
-    //m table entries at the moment
-    hashedPageTable pageTable(m);
+	//Inits
+	frameSpace fs(m);
+	frameSpace* fsPointer = &fs;
+	//m table entries at the moment
+	hashedPageTable pageTable(m);
 	hashedPageTable* ptPointer = &pageTable;	
-    
-    //function pointer for page replacement 
-    int (*pageReplacer)(hashedPageTable*, frameSpace*, int*, std::vector<int>, int);
-    if(strcmp(a, "OPTIMAL")==0){
-    	pageReplacer = optimal;
-    }	
-    if(strcmp(a, "FIFO")==0){
-    	pageReplacer = fifo;
-    }
-    if(strcmp(a, "LRU")==0){
-    	pageReplacer = lru;
-    }
-    if(strcmp(a, "LRU_CLOCK")==0){
-    	pageReplacer = lruClock;
-    }
-    
-    //Keep track of amount of page faults
-    int pageFaults = 0;	
+	
+	//function pointer for page replacement 
+	int (*pageReplacer)(hashedPageTable*, frameSpace*, int*, std::vector<int>, int);
+	if(strcmp(a, "OPTIMAL")==0){
+		pageReplacer = optimal;
+	}	
+	if(strcmp(a, "FIFO")==0){
+		pageReplacer = fifo;
+	}
+	if(strcmp(a, "LRU")==0){
+		pageReplacer = lru;
+	}
+	if(strcmp(a, "LRU_CLOCK")==0){
+		pageReplacer = lruClock;
+	}
+	
+	//Keep track of amount of page faults
+	int pageFaults = 0;	
 
 	//Index for LRU Clock, may not be used
 	int clockIndex = 0;
 
-    //Now the main page referencing happens
-    for(int i = 0; i< pageReferences.size(); ++i ){
-    	int vpn = pageReferences[i];
-	//Exception for page fault
-	try{
-	   int output = pageTable.searchEntry(vpn);
-	   //std::cout << "SEARCH DONE: " << output << std::endl;
-  	   if(output == 1){
-		//Hit
+	//Now the main page referencing happens
+	for(int i = 0; i< pageReferences.size(); ++i ){
+		int vpn = pageReferences[i];
+		//Exception for page fault
+		try{
+			int output = pageTable.searchEntry(vpn);
+			//std::cout << "SEARCH DONE: " << output << std::endl;
+			if(output == 1){
+				//Hit
 
-		//if LRU, we must update the LRU accordingly
-		if(pageReplacer == lru){
-			lruUpdate(fsPointer, vpn);
-		}
+				//if LRU, we must update the LRU accordingly
+				if(pageReplacer == lru){
+					lruUpdate(fsPointer, vpn);
+				}
 
-		//if LRU Clock, we must update the referenced bit
-		if(pageReplacer == lruClock){
-			pageTable.setRef(vpn, 1);
-		}
+				//if LRU Clock, we must update the referenced bit
+				if(pageReplacer == lruClock){
+					pageTable.setRef(vpn, 1);
+				}
 
-	   } else{
-		//Miss
-		pageFaults++;
-	   	throw(output);
-	   }
-	}
-	catch(int searchCode){
-	    if(searchCode == 0){
-	    	//Page was evicted previosly: Re-map into memory
-	     	//If the page was evicted, the frame space is full
-
-			if(pageReplacer == fifo || pageReplacer == lru){
-
-				// Element WILL BE at the first position, though this can be
-				// managed inside the pageReplacer() function. Should we?
-				int oldvpn = fs.frames[0];
-				int rframe = pageReplacer(ptPointer, fsPointer, &clockIndex, pageReferences, i);
-		
-				fs.map(vpn, rframe, false);
-				//std::cout << "OLD VPN: " << oldvpn << " NEW VPN: " << vpn << std::endl;
-				pageTable.setValid(oldvpn, 0); //Evicted
-				pageTable.setValid(vpn, 1); //re-mapped
-				pageTable.setRef(vpn, 1); // referenced
 			} else{
-				// We don't know for certain if the element will be in the first
-				// position as for the nature of the clock. pageRaplacer()
-				// manages the valid bit of the old vpn.
-				int rframe = pageReplacer(ptPointer, fsPointer, &clockIndex, pageReferences, i);
-
-				fs.map(vpn, rframe, false);
-				//std::cout << "OLD VPN: " << oldvpn << " NEW VPN: " << vpn << std::endl;
-				pageTable.setValid(vpn, 1); //re-mapped
-				pageTable.setRef(vpn, 1); // referenced
+				//Miss
+				pageFaults++;
+				throw(output);
 			}
+		}
+		catch(int searchCode){
+			if(searchCode == 0){
+				//Page was evicted previosly: Re-map into memory
+				//If the page was evicted, the frame space is full
 
-		
-	    }
-
-	    if(searchCode == -1){
-			//std::cout << "FLAG FOR -1 SEARCHCODE" << std::endl;
-					//Page is being referenced for the first time
-				//Map into memory
-			//The frame space could be or not be full
-			int available = fs.availableIndex();
-			if(available == -1){ //Full
 				if(pageReplacer == fifo || pageReplacer == lru){
 
 					// Element WILL BE at the first position, though this can be
@@ -504,8 +470,7 @@ int main(int argc, char *argv[]){
 					int rframe = pageReplacer(ptPointer, fsPointer, &clockIndex, pageReferences, i);
 			
 					fs.map(vpn, rframe, false);
-					pageTable.insertEntry(vpn, rframe);
-					
+					//std::cout << "OLD VPN: " << oldvpn << " NEW VPN: " << vpn << std::endl;
 					pageTable.setValid(oldvpn, 0); //Evicted
 					pageTable.setValid(vpn, 1); //re-mapped
 					pageTable.setRef(vpn, 1); // referenced
@@ -514,31 +479,62 @@ int main(int argc, char *argv[]){
 					// position as for the nature of the clock. pageRaplacer()
 					// manages the valid bit of the old vpn.
 					int rframe = pageReplacer(ptPointer, fsPointer, &clockIndex, pageReferences, i);
-						
-					fs.map(vpn, rframe, false);
-					pageTable.insertEntry(vpn, rframe);
 
+					fs.map(vpn, rframe, false);
+					//std::cout << "OLD VPN: " << oldvpn << " NEW VPN: " << vpn << std::endl;
 					pageTable.setValid(vpn, 1); //re-mapped
 					pageTable.setRef(vpn, 1); // referenced
 				}
-			}else{ //Not full
-					//std::cout << "FLAG NOT FULL: " << available << std::endl;
-				fs.map(vpn, available, true);
-				//Add to page table
-				pageTable.insertEntry(vpn, available);
 			}
-	    }
-	
+
+			if(searchCode == -1){
+				//std::cout << "FLAG FOR -1 SEARCHCODE" << std::endl;
+				//Page is being referenced for the first time
+				//Map into memory
+				//The frame space could be or not be full
+				int available = fs.availableIndex();
+				if(available == -1){ //Full
+					if(pageReplacer == fifo || pageReplacer == lru){
+
+						// Element WILL BE at the first position, though this can be
+						// managed inside the pageReplacer() function. Should we?
+						int oldvpn = fs.frames[0];
+						int rframe = pageReplacer(ptPointer, fsPointer, &clockIndex, pageReferences, i);
+				
+						fs.map(vpn, rframe, false);
+						pageTable.insertEntry(vpn, rframe);
+						
+						pageTable.setValid(oldvpn, 0); //Evicted
+						pageTable.setValid(vpn, 1); //re-mapped
+						pageTable.setRef(vpn, 1); // referenced
+					} else{
+						// We don't know for certain if the element will be in the first
+						// position as for the nature of the clock. pageRaplacer()
+						// manages the valid bit of the old vpn.
+						int rframe = pageReplacer(ptPointer, fsPointer, &clockIndex, pageReferences, i);
+							
+						fs.map(vpn, rframe, false);
+						pageTable.insertEntry(vpn, rframe);
+
+						pageTable.setValid(vpn, 1); //re-mapped
+						pageTable.setRef(vpn, 1); // referenced
+					}
+				}else{ //Not full
+						//std::cout << "FLAG NOT FULL: " << available << std::endl;
+					fs.map(vpn, available, true);
+					//Add to page table
+					pageTable.insertEntry(vpn, available);
+				}
+			}
+
+		}
+		std::cout << "------------------------------------" << std::endl;
+		fs.printfs();
+		pageTable.printTable();
+		std::cout << "------------------------------------" << std::endl;
 	}
-	std::cout << "------------------------------------" << std::endl;
-	fs.printfs();
-	pageTable.printTable();
-	std::cout << "------------------------------------" << std::endl;
-    }
 
 	std::cout << '\n' << "Hubieron " << pageFaults << " fallos de página. \n";
-    
-   
-	
-    return EXIT_SUCCESS;
+
+	return EXIT_SUCCESS;
 }
