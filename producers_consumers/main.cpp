@@ -112,6 +112,12 @@ public:
         std::unique_lock<std::mutex> mtxWrapper(mtx);
         log_file << "CONSUMER " << id << " STARTED" << std::endl;
 
+        while (count == 0 && p_done < p) {
+            log_file << "CONSUMER " << id << " GOES TO SLEEP!" << std::endl;
+            productAvailable.wait(mtxWrapper);
+            log_file << "CONSUMER " << id << " WOKE UP!" << std::endl;
+        }
+
         // if all producers are done, make consumer sleep and exit
         // ONLY DO THIS IS QUEUE IS EMPTY
         if (p_done == p && count == 0) {
@@ -119,11 +125,6 @@ public:
             std::this_thread::sleep_for(std::chrono::seconds(t));
             log_file << "CONSUMER " << id << " AWOKE FROM SLUMBER TO EXIT!" << std::endl;
             return;
-        }
-
-        if(count == 0) {
-            productAvailable.wait(mtxWrapper);
-            log_file << "CONSUMER " << id << " WOKE UP!" << std::endl;
         }
 
         items[out] = 0;
@@ -160,10 +161,15 @@ public:
 
         duplicateSize();
 
-        productAvailable.notify_one();
-
         log_file << "PRODUCER " << id << " ENDED" << std::endl;
         p_done++;
+
+        // if all producers are done, notify all threads that
+        // production is complete
+        if (p_done == p)
+            productAvailable.notify_all();
+        else
+            productAvailable.notify_one();
 
         mtxWrapper.unlock();
     }
