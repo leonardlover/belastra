@@ -6,7 +6,7 @@ Choose one of the directories available to compile, so either `cd page_replaceme
 compile the main.cpp files.
 
 ```bash
-g++ main.cpp -o main
+g++ main.cpp -o main -pthread -std=c++11
 ```
 
 ## Execution
