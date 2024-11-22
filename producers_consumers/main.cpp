@@ -150,7 +150,7 @@ public:
         std::unique_lock<std::mutex> mtxWrapper(mtx);
         log_file << "PRODUCER " << id << " STARTED" << std::endl;
 
-        if(count == size) {
+        while (count == size) {
             spaceAvailable.wait(mtxWrapper);
             log_file << "PRODUCER " << id << " WOKE UP!" << std::endl;
         }
